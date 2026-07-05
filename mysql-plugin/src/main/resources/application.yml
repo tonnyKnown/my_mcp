@@ -1,0 +1,37 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: mysql-mcp-server
+  main:
+    web-application-type: reactive
+    banner-mode: off
+  ai:
+    mcp:
+      server:
+        name: mysql-mcp-server
+        version: 1.0.0
+        type: SYNC
+        instructions: "MySQL MCP 服务，提供数据库查询和操作功能"
+        sse-endpoint: /mcp/sse
+    alibaba:
+      mcp:
+        nacos:
+          server-addr: 127.0.0.1:8848
+          namespace: public
+          username: nacos
+          password: nOn2h1l8cHSG
+          register:
+            enabled: true
+
+mysql:
+  host: localhost
+  port: 3306
+  database: example_db
+  username: root
+  password: your_password
+
+logging:
+  level:
+    com.example.mysql: DEBUG

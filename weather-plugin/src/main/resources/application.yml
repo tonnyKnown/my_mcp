@@ -1,0 +1,35 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: weather-mcp-server
+  main:
+    banner-mode: off
+  ai:
+    mcp:
+      server:
+        name: weather-mcp-server
+        version: 1.0.1
+        type: SYNC
+        instructions: "天气查询 MCP 服务，提供实时天气和天气预报查询功能"
+        sse-endpoint: /mcp/sse
+    alibaba:
+      mcp:
+        nacos:
+          server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+          namespace: ${NACOS_NAMESPACE:public}
+          username: ${NACOS_USERNAME:nacos}
+          password: ${NACOS_PASSWORD:nOn2h1l8cHSG}
+          register:
+            enabled: ${NACOS_REGISTER_ENABLED:true}
+
+# Weather API 配置
+weather:
+  api-key: ${WEATHER_API_KEY:63be2c273b8a90deea870533b0bf11b7}
+  base-url: https://api.openweathermap.org/data/2.5
+
+logging:
+  level:
+    com.example.weather: DEBUG
+    org.springframework.ai: DEBUG

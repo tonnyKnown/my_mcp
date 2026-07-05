@@ -1,0 +1,33 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: filesystem-mcp-server
+  main:
+    web-application-type: reactive
+    banner-mode: off
+  ai:
+    mcp:
+      server:
+        name: filesystem-mcp-server
+        version: 1.0.1
+        type: SYNC
+        instructions: "文件系统 MCP 服务，提供文件读写、列表和删除功能"
+        sse-endpoint: /mcp/sse
+    alibaba:
+      mcp:
+        nacos:
+          server-addr: 127.0.0.1:8848
+          namespace: public
+          username: nacos
+          password: nOn2h1l8cHSG
+          register:
+            enabled: true
+
+filesystem:
+  base-path: ./tempFile
+
+logging:
+  level:
+    com.example.filesystem: DEBUG
