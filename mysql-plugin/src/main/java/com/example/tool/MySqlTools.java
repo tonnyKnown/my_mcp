@@ -1,4 +1,4 @@
-package com.example.mysql;
+package com.example.tool;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.ai.tool.annotation.Tool;

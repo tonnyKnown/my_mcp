@@ -1,5 +1,6 @@
-package com.example.mysql;
+package com.example;
 
+import com.example.tool.MySqlTools;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.boot.SpringApplication;

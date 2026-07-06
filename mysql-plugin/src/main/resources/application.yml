@@ -30,7 +30,7 @@ mysql:
   port: 3306
   database: example_db
   username: root
-  password: your_password
+  password: your_actual_password
 
 logging:
   level:
