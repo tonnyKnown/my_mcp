@@ -11,9 +11,9 @@ spring:
     mcp:
       server:
         name: mysql-mcp-server
-        version: 1.0.0
+        version: 1.0.1
         type: SYNC
-        instructions: "MySQL MCP 服务，提供数据库查询和操作功能"
+        instructions: "MySQL MCP 服务，提供数据库查询和操作功能。注意：修改订单状态请使用 updateOrderStatus 工具，不要使用 SQL 直接操作"
         sse-endpoint: /mcp/sse
     alibaba:
       mcp:
@@ -25,12 +25,17 @@ spring:
           register:
             enabled: true
 
-mysql:
-  host: localhost
-  port: 3306
-  database: example_db
-  username: root
-  password: your_actual_password
+  datasource:
+    url: jdbc:mysql://localhost:3306/example_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password: your_actual_password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 3
+      connection-timeout: 5000
+      idle-timeout: 300000
+      max-lifetime: 600000
 
 logging:
   level:

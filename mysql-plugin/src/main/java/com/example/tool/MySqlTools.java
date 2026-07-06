@@ -1,43 +1,47 @@
 package com.example.tool;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import javax.sql.DataSource;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 @Service
 public class MySqlTools {
 
+    private static final Logger log = LoggerFactory.getLogger(MySqlTools.class);
+
+    private static final int MAX_SQL_LENGTH = 1000;
+    private static final int MAX_QUERY_ROWS = 50;
+    private static final Pattern READ_ONLY_QUERY_PATTERN = Pattern.compile("(?is)^\\s*SELECT\\b");
+    private static final Pattern DANGEROUS_SQL_PATTERN = Pattern.compile(
+            "(?i)\\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|REPLACE|MERGE|CALL|EXEC|EXECUTE|GRANT|REVOKE|LOAD|LOCK|UNLOCK|KILL|SET|USE|ANALYZE|OPTIMIZE|REPAIR|RENAME)\\b");
+    private static final Pattern FILE_SQL_PATTERN = Pattern.compile(
+            "(?i)\\b(INTO\\s+OUTFILE|INTO\\s+DUMPFILE|LOAD\\s+DATA|INFILE)\\b");
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Value("${mysql.host:localhost}")
-    private String host;
-
-    @Value("${mysql.port:3306}")
-    private int port;
-
-    @Value("${mysql.database:example_db}")
-    private String database;
-
-    @Value("${mysql.username:root}")
-    private String username;
-
-    @Value("${mysql.password:}")
-    private String password;
+    @Autowired
+    private DataSource dataSource;
 
     @Tool(description = "执行 SQL 查询语句（SELECT）")
     public String mysqlQuery(
             @ToolParam(description = "SQL 查询语句") String sql) {
         try {
-            if (!sql.trim().toUpperCase().startsWith("SELECT")) {
-                return "只支持 SELECT 查询语句";
+            log.info("mysqlQuery called, sql={}", sql);
+            String validationError = validateReadOnlySql(sql);
+            if (validationError != null) {
+                return validationError;
             }
             
             List<Map<String, Object>> results = executeQuery(sql);
@@ -47,17 +51,16 @@ public class MySqlTools {
         }
     }
 
-    @Tool(description = "执行 SQL 更新语句（INSERT/UPDATE/DELETE）")
+    @Tool(description = "【仅只读查询】执行只读 SELECT 查询，不可执行 INSERT/UPDATE/DELETE。修改数据请使用其他专用工具（如 updateOrderStatus）")
     public String mysqlExecute(
             @ToolParam(description = "SQL 更新语句") String sql) {
         try {
-            String upperSql = sql.trim().toUpperCase();
-            if (!upperSql.startsWith("INSERT") && !upperSql.startsWith("UPDATE") && !upperSql.startsWith("DELETE")) {
-                return "只支持 INSERT/UPDATE/DELETE 语句";
+            log.info("mysqlExecute called, sql={}", sql);
+            String validationError = validateSqlBasic(sql);
+            if (validationError != null) {
+                return validationError;
             }
-            
-            int affectedRows = executeUpdate(sql);
-            return "执行成功，影响行数: " + affectedRows;
+            return "SQL execution rejected: dangerous operations are disabled. Only read-only SELECT queries are allowed.";
         } catch (Exception e) {
             return "执行失败: " + e.getMessage();
         }
@@ -69,7 +72,7 @@ public class MySqlTools {
             List<String> tables = new ArrayList<>();
             try (Connection conn = getConnection()) {
                 DatabaseMetaData metaData = conn.getMetaData();
-                ResultSet rs = metaData.getTables(database, null, "%", new String[]{"TABLE"});
+                ResultSet rs = metaData.getTables(conn.getCatalog(), null, "%", new String[]{"TABLE"});
                 while (rs.next()) {
                     tables.add(rs.getString("TABLE_NAME"));
                 }
@@ -87,7 +90,7 @@ public class MySqlTools {
             List<Map<String, Object>> columns = new ArrayList<>();
             try (Connection conn = getConnection()) {
                 DatabaseMetaData metaData = conn.getMetaData();
-                ResultSet rs = metaData.getColumns(database, null, tableName, null);
+                ResultSet rs = metaData.getColumns(conn.getCatalog(), null, tableName, null);
                 while (rs.next()) {
                     Map<String, Object> column = new HashMap<>();
                     column.put("name", rs.getString("COLUMN_NAME"));
@@ -104,25 +107,77 @@ public class MySqlTools {
     }
 
     private Connection getConnection() throws SQLException {
-        String url = String.format("jdbc:mysql://%s:%d/%s?useSSL=false&serverTimezone=UTC", host, port, database);
-        return DriverManager.getConnection(url, username, password);
+        return dataSource.getConnection();
+    }
+
+    private String validateReadOnlySql(String sql) {
+        String validationError = validateSqlBasic(sql);
+        if (validationError != null) {
+            return validationError;
+        }
+
+        String normalizedSql = stripTrailingSemicolon(sql.trim());
+        if (!READ_ONLY_QUERY_PATTERN.matcher(normalizedSql).find()) {
+            return "SQL validation failed: only SELECT queries are allowed";
+        }
+        if (DANGEROUS_SQL_PATTERN.matcher(normalizedSql).find()) {
+            return "SQL validation failed: dangerous SQL operation is not allowed";
+        }
+        if (FILE_SQL_PATTERN.matcher(normalizedSql).find()) {
+            return "SQL validation failed: file read/write SQL is not allowed";
+        }
+        return null;
+    }
+
+    private String validateSqlBasic(String sql) {
+        if (sql == null || sql.trim().isEmpty()) {
+            return "Parameter validation failed: missing required parameter sql";
+        }
+        if (sql.length() > MAX_SQL_LENGTH) {
+            return "Parameter validation failed: parameter sql length must be <= " + MAX_SQL_LENGTH;
+        }
+
+        String trimmedSql = sql.trim();
+        if (containsSqlComment(trimmedSql)) {
+            return "SQL validation failed: SQL comments are not allowed";
+        }
+
+        String withoutTrailingSemicolon = stripTrailingSemicolon(trimmedSql);
+        if (withoutTrailingSemicolon.contains(";")) {
+            return "SQL validation failed: multiple SQL statements are not allowed";
+        }
+        return null;
+    }
+
+    private boolean containsSqlComment(String sql) {
+        return sql.contains("--") || sql.contains("#") || sql.contains("/*") || sql.contains("*/");
+    }
+
+    private String stripTrailingSemicolon(String sql) {
+        String trimmedSql = sql.trim();
+        if (trimmedSql.endsWith(";")) {
+            return trimmedSql.substring(0, trimmedSql.length() - 1).trim();
+        }
+        return trimmedSql;
     }
 
     private List<Map<String, Object>> executeQuery(String sql) throws SQLException {
         List<Map<String, Object>> results = new ArrayList<>();
         try (Connection conn = getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+             Statement stmt = conn.createStatement()) {
             
+            stmt.setMaxRows(MAX_QUERY_ROWS);
+            try (ResultSet rs = stmt.executeQuery(sql)) {
             ResultSetMetaData metaData = rs.getMetaData();
             int columnCount = metaData.getColumnCount();
             
-            while (rs.next()) {
+            while (rs.next() && results.size() < MAX_QUERY_ROWS) {
                 Map<String, Object> row = new HashMap<>();
                 for (int i = 1; i <= columnCount; i++) {
                     row.put(metaData.getColumnName(i), rs.getObject(i));
                 }
                 results.add(row);
+            }
             }
         }
         return results;

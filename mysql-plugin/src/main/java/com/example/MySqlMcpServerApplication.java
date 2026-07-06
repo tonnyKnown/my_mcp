@@ -1,6 +1,7 @@
 package com.example;
 
 import com.example.tool.MySqlTools;
+import com.example.tool.OrderTools;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.boot.SpringApplication;
@@ -15,9 +16,9 @@ public class MySqlMcpServerApplication {
     }
 
     @Bean
-    public ToolCallbackProvider mysqlToolCallbackProvider(MySqlTools mysqlTools) {
+    public ToolCallbackProvider mysqlToolCallbackProvider(MySqlTools mysqlTools, OrderTools orderTools) {
         return MethodToolCallbackProvider.builder()
-                .toolObjects(mysqlTools)
+                .toolObjects(mysqlTools, orderTools)
                 .build();
     }
 }
