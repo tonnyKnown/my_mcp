@@ -11,7 +11,7 @@ spring:
     mcp:
       server:
         name: mysql-mcp-server
-        version: 1.0.1
+        version: 1.0.0
         type: SYNC
         instructions: "MySQL MCP 服务，提供数据库查询和操作功能。注意：修改订单状态请使用 updateOrderStatus 工具，不要使用 SQL 直接操作"
         sse-endpoint: /mcp/sse
